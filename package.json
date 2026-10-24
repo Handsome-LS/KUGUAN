@@ -1,0 +1,14 @@
+{
+  "name": "kuguan-warehouse",
+  "version": "1.0.0",
+  "private": true,
+  "description": "库管 · 多仓库库存管理系统",
+  "type": "module",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test",
+    "test:browser": "node scripts/verify-browser.mjs"
+  }
+}
