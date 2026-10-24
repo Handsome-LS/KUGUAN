@@ -9,6 +9,7 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "test": "node --test",
-    "test:browser": "node scripts/verify-browser.mjs"
+    "test:browser": "node scripts/verify-browser.mjs",
+    "package": "node scripts/package.mjs"
   }
 }

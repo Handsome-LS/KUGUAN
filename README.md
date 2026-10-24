@@ -14,6 +14,17 @@ npm start
 
 Windows PowerShell 如果限制 npm 脚本执行，可使用 `npm.cmd start` 或 `node server.js`。
 
+## 下载发布包
+
+在 [GitHub Releases](https://github.com/Handsome-LS/KUGUAN/releases) 下载 `KUGUAN-v1.0.0.zip`，解压后运行。需要先安装 Node.js 24 或更新版本；不需要安装 npm 依赖。
+
+- Windows：双击 `start.cmd`，保持启动窗口打开，然后访问 http://localhost:3000。
+- macOS / Linux：在解压目录执行 `node server.js`，然后访问 http://localhost:3000。
+- 首次运行会自动建立本地数据库与演示数据；发布包不包含开发者的数据库。
+- `SHA256SUMS.txt` 包含 ZIP 的 SHA-256 校验值，可用于验证下载完整性。
+
+开发者在 Git 工作区没有未提交改动时运行 `npm run package`，即可将当前提交打包到 `dist/` 并生成校验文件。打包需要 Git，运行发布包不需要 Git。
+
 ## 已实现
 
 - 工作台概览：库存统计、各仓库库存分布、今日流转与最近动态。
