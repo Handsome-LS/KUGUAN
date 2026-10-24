@@ -6,16 +6,18 @@ import { resolve, join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createDatabase } from '../lib/database.js';
 import { createApp } from '../server.js';
+import { createPagesPreview } from './preview-pages.mjs';
 
 const output = resolve('test-results');
+const isDemo = process.argv.includes('--demo');
 mkdirSync(output, { recursive: true });
 const profile = join(output, `browser-profile-${Date.now()}`);
 const chromePath = process.env.CHROME_PATH || ['C:/Program Files/Google/Chrome/Application/chrome.exe', 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'].find(existsSync);
 if (!chromePath) throw new Error('找不到 Chrome / Edge，请通过 CHROME_PATH 指定浏览器可执行文件。');
 const database = createDatabase(':memory:');
-const server = createApp(database);
+const server = isDemo ? createPagesPreview() : createApp(database);
 await new Promise((complete) => server.listen(0, '127.0.0.1', complete));
-const base = `http://127.0.0.1:${server.address().port}`;
+const base = `http://127.0.0.1:${server.address().port}${isDemo ? '/KUGUAN/' : ''}`;
 const browser = spawn(chromePath, ['--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check', '--disable-background-networking', '--disable-extensions', '--no-sandbox', '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--window-size=1440,1080', 'about:blank'], { windowsHide: true, stdio: 'ignore' });
 let socket;
 let sequence = 0;
@@ -55,7 +57,7 @@ async function fillForm(values) {
   await evaluate(`(() => { const form = document.querySelector('#modal form'); const values = ${JSON.stringify(values)}; for (const [name, value] of Object.entries(values)) { const field = form.elements[name]; field.value = value; field.dispatchEvent(new Event('input', { bubbles: true })); field.dispatchEvent(new Event('change', { bubbles: true })); } })()`);
 }
 const submit = () => evaluate('document.querySelector("#modal form").requestSubmit()');
-const snapshot = () => fetch(`${base}/api/state`).then((response) => response.json());
+const snapshot = () => isDemo ? evaluate('import(new URL("./demo-store.js", location.href)).then(module => module.createDemoStore().request("/api/state"))') : fetch(`${base}/api/state`).then((response) => response.json());
 function passed(label) { checks.push(label); console.log(`PASS ${label}`); }
 
 try {
@@ -82,6 +84,11 @@ try {
   await command('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1080, deviceScaleFactor: 1, mobile: false });
   await command('Page.navigate', { url: base });
   await waitFor('.inventory-table tbody tr');
+  if (isDemo) {
+    assert.ok(await evaluate('document.querySelector(".demo-notice").textContent.includes("当前浏览器")'));
+    assert.ok(await evaluate('document.querySelector(".workspace-badge").textContent.includes("演示")'));
+    passed('GitHub project subpath serves demo assets and browser-storage notices');
+  }
   assert.equal(await evaluate('document.querySelectorAll(".metric-card").length'), 4);
   assert.equal(await evaluate('document.querySelectorAll(".inventory-table tbody tr").length'), 8);
   assert.ok(await evaluate('document.documentElement.scrollWidth <= innerWidth'));
@@ -110,7 +117,7 @@ try {
 
   await click('[data-action="operation"][data-kind="consume"]');
   await fillForm({ itemId, warehouseId: 'wh-1', quantity: 11, note: '超额消耗测试' });
-  expectedBadRequests++;
+  if (!isDemo) expectedBadRequests++;
   await submit();
   await until(() => evaluate('!document.querySelector("#form-error").hidden'), '库存不足错误');
   assert.match(await evaluate('document.querySelector("#form-error").textContent'), /库存不足/);
@@ -180,6 +187,17 @@ try {
   assert.equal((await snapshot()).operations.filter((operation) => operation.item_id === itemId).length, 3);
   passed('Reload retains inventory, history and selected operator');
 
+  if (isDemo) {
+    const before = await snapshot();
+    const attempts = await evaluate(`(() => { const operation = { kind: 'consume', itemId: ${JSON.stringify(itemId)}, warehouseId: 'wh-1', adminId: 'admin-1', quantity: 4, note: '并发领用验证' }; return Promise.allSettled(Array.from({ length: 2 }, () => import(new URL('./demo-store.js', location.href)).then(module => module.createDemoStore().request('/api/operations', operation)))).then(results => results.map(result => result.status)); })()`);
+    assert.equal(attempts.filter((status) => status === 'fulfilled').length, 1);
+    assert.equal(attempts.filter((status) => status === 'rejected').length, 1);
+    const after = await snapshot();
+    assert.equal(after.stocks.find((stock) => stock.item_id === itemId && stock.warehouse_id === 'wh-1').quantity, 1);
+    assert.equal(after.operations.length, before.operations.length + 1);
+    passed('Concurrent browser transactions prevent negative stock and lost updates');
+  }
+
   await command('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
   await delay(250);
   assert.ok(await evaluate('document.documentElement.scrollWidth <= innerWidth'));
@@ -193,7 +211,7 @@ try {
   passed('Mobile layout has no overflow and drawer navigation works');
   assert.deepEqual(errors, []);
   passed('No browser JavaScript or console errors');
-  await writeFile(join(output, 'browser-report.json'), JSON.stringify({ passed: checks.length, checks, errors }, null, 2));
+  await writeFile(join(output, isDemo ? 'pages-browser-report.json' : 'browser-report.json'), JSON.stringify({ passed: checks.length, checks, errors }, null, 2));
   console.log(`Browser checks passed: ${checks.length}. Screenshots: ${output}`);
 } finally {
   socket?.close();

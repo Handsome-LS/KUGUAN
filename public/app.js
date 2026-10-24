@@ -51,12 +51,18 @@ const formatDate = (value, short = false) => new Intl.DateTimeFormat('zh-CN', { 
 const today = () => new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }).format(new Date());
 const app = document.querySelector('#app');
 const modal = document.querySelector('#modal');
+const isDemo = document.querySelector('meta[name="kuguan-mode"]')?.content === 'demo';
+let demoStore;
 const viewNames = { overview: '工作台概览', inventory: '物品库存', warehouses: '仓库管理', records: '操作记录', admins: '管理员' };
 let storedAdmin;
 try { storedAdmin = localStorage.getItem('kuguan-admin'); } catch {}
 const state = { data: null, view: 'inventory', warehouse: 'all', category: 'all', status: 'all', search: '', page: 1, pageSize: 8, selected: new Set(), sort: 'default', filters: false, recordKind: 'all', recordDays: 'all', adminId: storedAdmin || 'admin-1', mobileNav: false };
 
 async function api(path, payload) {
+  if (isDemo) {
+    demoStore ??= import('./demo-store.js').then(({ createDemoStore }) => createDemoStore());
+    return (await demoStore).request(path, payload);
+  }
   const response = await fetch(path, payload ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) } : {});
   const result = await response.json();
   if (!response.ok) throw new Error(result.error || '请求失败，请稍后重试');
@@ -108,14 +114,14 @@ function shell() {
   const admin = currentAdmin();
   app.innerHTML = `<aside class="sidebar ${state.mobileNav ? 'mobile-open' : ''}">
     <a class="brand" href="#inventory" aria-label="库管首页"><span class="brand-mark">${icon('box')}</span><span class="brand-name">库管<span>KUGUAN</span></span><span class="brand-dot"></span></a>
-    <div class="workspace-label">工作空间 <span class="workspace-badge">本地版</span></div>
+    <div class="workspace-label">工作空间 <span class="workspace-badge">${isDemo ? '在线演示' : '本地版'}</span></div>
     <nav class="main-nav" aria-label="主导航">${[['overview', 'grid', '工作台概览'], ['inventory', 'box', '物品库存'], ['warehouses', 'warehouse', '仓库管理'], ['records', 'history', '操作记录'], ['admins', 'users', '管理员']].map(([view, symbol, label]) => `<button class="nav-item ${state.view === view ? 'active' : ''}" data-view="${view}">${icon(symbol)}<span>${label}</span>${view === 'inventory' ? `<span class="nav-count">${state.data.items.length}</span>` : ''}</button>`).join('')}</nav>
     <div class="sidebar-divider"></div><div class="sidebar-label">我的仓库<button class="icon-button" data-action="new-warehouse" title="新建仓库" aria-label="新建仓库">${icon('plus')}</button></div>
     <div class="warehouse-nav">${state.data.warehouses.map((warehouse, index) => `<button class="warehouse-nav-item ${state.warehouse === warehouse.id ? 'selected' : ''}" data-warehouse="${escapeHtml(warehouse.id)}"><span class="warehouse-dot dot-${index % 3}"></span><span>${escapeHtml(warehouse.name)}</span>${icon('chevron')}</button>`).join('')}</div>
     <div class="sidebar-bottom"><div class="sidebar-tip"><span class="tip-icon">${icon('leaf')}</span><strong>井井有条，心中有数</strong><p>每一件物品的来去<br>都有迹可循。</p><span class="tip-decoration">${icon('box')}</span></div><button class="help-link" data-action="help">${icon('help')}<span>使用帮助</span>${icon('external')}</button><div class="sidebar-version">库管 · 让仓储更简单 <span>v1.0</span></div></div>
   </aside>
   <div class="sidebar-scrim ${state.mobileNav ? 'visible' : ''}" data-action="close-nav"></div>
-  <div class="workspace"><header class="topbar"><div class="breadcrumb"><button class="icon-button mobile-menu" data-action="menu" aria-label="打开导航">${icon('menu')}</button><span class="breadcrumb-home">工作空间</span>${icon('chevron')}<span>${viewNames[state.view]}</span></div><div class="topbar-right"><span class="topbar-date">${icon('calendar')}${today()}</span><span class="topbar-separator"></span><button class="icon-button notification-button" data-action="notifications" aria-label="查看库存预警" title="库存预警">${icon('bell')}${state.data.items.some(isLow) ? '<span class="notification-dot"></span>' : ''}</button><button class="profile-button" data-action="switch-admin" title="切换操作人">${avatar(admin)}<span>${escapeHtml(admin?.name)}<small>${escapeHtml(admin?.role)}</small></span>${icon('down')}</button></div></header><main id="main-content"></main><footer class="page-footer"><span>每一份库存，都心中有数。</span><span><i class="online-dot"></i> 本地数据库已连接</span></footer></div>`;
+  <div class="workspace"><header class="topbar"><div class="breadcrumb"><button class="icon-button mobile-menu" data-action="menu" aria-label="打开导航">${icon('menu')}</button><span class="breadcrumb-home">工作空间</span>${icon('chevron')}<span>${viewNames[state.view]}</span></div><div class="topbar-right"><span class="topbar-date">${icon('calendar')}${today()}</span><span class="topbar-separator"></span><button class="icon-button notification-button" data-action="notifications" aria-label="查看库存预警" title="库存预警">${icon('bell')}${state.data.items.some(isLow) ? '<span class="notification-dot"></span>' : ''}</button><button class="profile-button" data-action="switch-admin" title="切换操作人">${avatar(admin)}<span>${escapeHtml(admin?.name)}<small>${escapeHtml(admin?.role)}</small></span>${icon('down')}</button></div></header><main id="main-content"></main><footer class="page-footer"><span>每一份库存，都心中有数。</span><span><i class="online-dot"></i> ${isDemo ? '演示数据保存在此浏览器' : '本地数据库已连接'}</span></footer></div>`;
   renderMain();
 }
 
@@ -194,7 +200,7 @@ function admins() {
   return `${pageHeader('管理员', '明确每一份责任，让协作有序发生。', `<button class="button primary" data-action="new-admin">${icon('plus')}添加管理员</button>`)}<div class="section-toolbar"><span class="section-summary">共 <strong>${state.data.admins.length}</strong> 位成员 · 当前操作人：${escapeHtml(currentAdmin()?.name)}</span>${searchInput('搜索姓名、职务、联系方式…')}</div><section class="admin-grid">${list.map((admin) => {
     const assigned = state.data.warehouses.filter((warehouse) => warehouse.manager_id === admin.id);
     return `<article class="admin-card panel"><div class="admin-card-heading">${avatar(admin, 'large')}${admin.id === state.adminId ? '<span class="current-label">当前操作人</span>' : ''}</div><h2>${escapeHtml(admin.name)}</h2><p class="admin-role">${icon('shield')}${escapeHtml(admin.role)}</p><div class="admin-contact">${icon('phone')} ${escapeHtml(admin.phone || '未填写联系方式')}</div><div class="admin-warehouses"><span>负责仓库</span><div>${assigned.length ? assigned.map((warehouse) => `<button class="warehouse-tag" data-warehouse="${escapeHtml(warehouse.id)}">${icon('warehouse')}${escapeHtml(warehouse.name)}</button>`).join('') : '<span class="muted">暂未分配仓库</span>'}</div></div><div class="admin-card-footer"><span>已完成 <strong>${state.data.operations.filter((operation) => operation.admin_id === admin.id).length}</strong> 次操作</span><button class="text-link" data-action="choose-admin" data-id="${escapeHtml(admin.id)}" ${admin.id === state.adminId ? 'disabled' : ''}>切换为此操作人 ${icon('arrowRight')}</button></div></article>`;
-  }).join('')}</section>${!list.length ? emptyState('没有找到管理员', '试试搜索其他姓名或联系方式。', 'reset-filters', '清空搜索') : ''}<p class="page-hint">${icon('help')}操作人用于记录实际经办成员；当前本地版不包含账号登录和权限隔离。</p>`;
+  }).join('')}</section>${!list.length ? emptyState('没有找到管理员', '试试搜索其他姓名或联系方式。', 'reset-filters', '清空搜索') : ''}<p class="page-hint">${icon('help')}操作人用于记录实际经办成员；当前版本不包含账号登录和权限隔离。</p>`;
 }
 
 const operationLabel = (kind) => ({ in: '加入', consume: '消耗', transfer: '调拨' }[kind]);
@@ -223,7 +229,7 @@ function renderMain(preserveSearch = false) {
   if (!content) return;
   const focused = preserveSearch && document.activeElement?.id === 'search-input';
   const selection = focused ? document.activeElement.selectionStart : null;
-  content.innerHTML = ({ inventory, warehouses, records, admins, overview }[state.view])();
+  content.innerHTML = `${isDemo ? `<div class="demo-notice">${icon('help')}<span>在线演示 · 数据仅保存在当前浏览器，不会与其他人共享；清除网站数据会重置演示。</span><a href="https://github.com/Handsome-LS/KUGUAN/releases" target="_blank" rel="noopener noreferrer">下载本地版 ${icon('external')}</a></div>` : ''}${({ inventory, warehouses, records, admins, overview }[state.view])()}`;
   if (focused) {
     const search = document.querySelector('#search-input');
     search?.focus({ preventScroll: true });
@@ -314,11 +320,11 @@ function showRecordDetail(id) {
 }
 
 function showAdminSwitch() {
-  openModal('切换操作人', '后续物品操作将以选中的管理员身份记录。', `<div class="modal-body admin-switch-list">${state.data.admins.map((admin) => `<button data-action="choose-admin" data-id="${escapeHtml(admin.id)}">${avatar(admin)}<span>${escapeHtml(admin.name)}<small>${escapeHtml(admin.role)}</small></span>${state.adminId === admin.id ? icon('check') : icon('chevron')}</button>`).join('')}<div class="info-note">${icon('help')}当前为本地协作版，操作人选择不代表账号登录或权限验证。</div></div>`);
+  openModal('切换操作人', '后续物品操作将以选中的管理员身份记录。', `<div class="modal-body admin-switch-list">${state.data.admins.map((admin) => `<button data-action="choose-admin" data-id="${escapeHtml(admin.id)}">${avatar(admin)}<span>${escapeHtml(admin.name)}<small>${escapeHtml(admin.role)}</small></span>${state.adminId === admin.id ? icon('check') : icon('chevron')}</button>`).join('')}<div class="info-note">${icon('help')}${isDemo ? '当前为在线演示，数据保存在当前浏览器。' : '当前为本地协作版。'}操作人选择不代表账号登录或权限验证。</div></div>`);
 }
 
 function showHelp() {
-  openModal('欢迎使用库管', '让每一件物品的来去都有迹可循。', `<div class="modal-body help-content"><div><span class="metric-icon purple">${icon('box')}</span><section><h3>建立物品档案</h3><p>点击「新建物品」填写名称、唯一编号、分类与单位。新建档案初始库存为零，状态为「不存在」。</p></section></div><div><span class="metric-icon green">${icon('arrowDown')}</span><section><h3>加入与消耗</h3><p>「加入物品」记录数量、仓库和生产地 / 来源；「消耗」填写数量与用途备注。库存会自动计算，不能消耗超过现有库存的物品。</p></section></div><div><span class="metric-icon blue">${icon('transfer')}</span><section><h3>仓库间调拨</h3><p>选择来源仓库、目标仓库及数量。一次提交同时更新两边库存，并保留完整的调拨记录。</p></section></div><div><span class="metric-icon orange">${icon('history')}</span><section><h3>记录与数据</h3><p>每次库存操作都会保存操作人、时间、数量与备注，支持筛选和 CSV 导出。数据保存在本机 SQLite 数据库，关闭页面后仍保留。首次启动已加入演示物品，方便体验。</p></section></div><div class="info-note">${icon('users')}右上角可切换操作人。当前本地版不包含登录和角色权限隔离，所有成员均可进行库存操作。</div></div><div class="modal-footer"><button class="button primary" data-action="close-modal">开始使用 ${icon('arrowRight')}</button></div>`);
+  openModal('欢迎使用库管', '让每一件物品的来去都有迹可循。', `<div class="modal-body help-content"><div><span class="metric-icon purple">${icon('box')}</span><section><h3>建立物品档案</h3><p>点击「新建物品」填写名称、唯一编号、分类与单位。新建档案初始库存为零，状态为「不存在」。</p></section></div><div><span class="metric-icon green">${icon('arrowDown')}</span><section><h3>加入与消耗</h3><p>「加入物品」记录数量、仓库和生产地 / 来源；「消耗」填写数量与用途备注。库存会自动计算，不能消耗超过现有库存的物品。</p></section></div><div><span class="metric-icon blue">${icon('transfer')}</span><section><h3>仓库间调拨</h3><p>选择来源仓库、目标仓库及数量。一次提交同时更新两边库存，并保留完整的调拨记录。</p></section></div><div><span class="metric-icon orange">${icon('history')}</span><section><h3>记录与数据</h3><p>每次库存操作都会保存操作人、时间、数量与备注，支持筛选和 CSV 导出。${isDemo ? '演示数据保存在当前浏览器，关闭页面后仍保留；不与其他人共享，清除网站数据会重置演示。' : '数据保存在本机 SQLite 数据库，关闭页面后仍保留。'}首次启动已加入演示物品，方便体验。</p></section></div><div class="info-note">${icon('users')}右上角可切换操作人。当前版本不包含登录和角色权限隔离，所有成员均可进行库存操作。</div></div><div class="modal-footer"><button class="button primary" data-action="close-modal">开始使用 ${icon('arrowRight')}</button></div>`);
 }
 
 function exportCsv() {
@@ -459,6 +465,6 @@ try {
   if (viewNames[location.hash.slice(1)]) state.view = location.hash.slice(1);
   shell();
 } catch (error) {
-  app.innerHTML = `<div class="connection-error"><span class="boot-mark">${icon('warehouse')}</span><h1>暂时无法连接仓库</h1><p>${escapeHtml(error.message)}</p><p>请确认本地服务已启动，然后刷新页面。</p><button class="button primary" id="retry">重新连接</button></div>`;
+  app.innerHTML = `<div class="connection-error"><span class="boot-mark">${icon('warehouse')}</span><h1>暂时无法连接仓库</h1><p>${escapeHtml(error.message)}</p><p>${isDemo ? '请确认网络正常并允许本站保存网站数据，然后刷新页面。' : '请确认本地服务已启动，然后刷新页面。'}</p><button class="button primary" id="retry">重新连接</button></div>`;
   document.querySelector('#retry').addEventListener('click', () => location.reload());
 }

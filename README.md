@@ -2,6 +2,18 @@
 
 一个开箱即用的中文多仓库管理应用。使用 Node.js 内置 HTTP 服务与 SQLite，前端采用原生 JavaScript，无需下载第三方依赖。
 
+## 在线查看
+
+直接打开 [库管在线演示](https://Handsome-LS.github.io/KUGUAN/)，无需安装 Node.js。
+
+在线演示支持物品、仓库、管理员、入库、消耗、调拨、操作记录与 CSV 导出，使用浏览器 IndexedDB 保存演示数据。数据只存在于当前浏览器，不会同步到其他设备或访客；清除网站数据会重置演示。不同标签页的库存写入通过浏览器事务串行执行。页面上方会明确显示演示模式。
+
+本地运行版继续使用 SQLite 数据库。GitHub Pages 仅发布前端和单独生成的示例数据，不会上传本机数据库，也不提供多人共享的服务端数据库。
+
+仓库推送到 `main` 时，`.github/workflows/pages.yml` 会运行测试、构建并部署在线演示。GitHub 仓库的 Settings → Pages → Source 应选择 GitHub Actions。
+
+本地验证静态演示：先运行 `npm run build:pages`，再运行 `npm run preview:pages`，打开 http://localhost:4173/KUGUAN/。`npm run test:pages` 会在 Chrome / Edge 中验证项目子路径、表单操作、浏览器持久化、并发库存事务与移动端布局。
+
 ## 启动
 
 安装 Node.js 24 或更新版本，在项目目录运行：

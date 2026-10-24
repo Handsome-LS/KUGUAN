@@ -8,8 +8,11 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "test": "node --test",
+    "test": "node --test test/warehouse.test.js test/demo.test.js",
     "test:browser": "node scripts/verify-browser.mjs",
+    "test:pages": "node scripts/build-pages.mjs && node scripts/verify-browser.mjs --demo",
+    "build:pages": "node scripts/build-pages.mjs",
+    "preview:pages": "node scripts/preview-pages.mjs",
     "package": "node scripts/package.mjs"
   }
 }
